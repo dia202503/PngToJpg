@@ -1,473 +1,235 @@
 <!doctype html>
 <html lang="ja">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport"
-          content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-    <title>PNG → JPG 変換</title>
-    <style>
-        :root {
-            --bg: #0f172a;
-            --fg: #e2e8f0;
-            --muted: #94a3b8;
-            --accent: #2563eb;
-            --panel: #111827;
-        }
-
-        html, body {
-            margin: 0;
-            height: 100%;
-            background: #0b1020;
-            color: #e6edf3;
-            font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Inter,Helvetica,Arial,"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif
-        }
-
-        header {
-            position: sticky;
-            top: 0;
-            background: #1f2a44;
-            color: #fff;
-            padding: 14px 16px;
-            font-size: 22px;
-            font-weight: 700;
-            z-index: 10;
-            box-shadow: 0 2px 8px rgba(0,0,0,.25)
-        }
-
-        main {
-            padding: 16px;
-            max-width: 980px;
-            margin: 0 auto
-        }
-
-        .card {
-            background: #101827;
-            border: 1px solid #24324d;
-            border-radius: 12px;
-            padding: 14px;
-            margin: 12px 0
-        }
-
-        .row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center
-        }
-
-            .row > * {
-                margin: 4px 0
-            }
-
-        .btn {
-            appearance: none;
-            border: 0;
-            border-radius: 10px;
-            padding: 10px 14px;
-            background: #2563eb;
-            color: #fff;
-            font-weight: 600
-        }
-
-            .btn:disabled {
-                opacity: .5
-            }
-
-            .btn.sec {
-                background: #334155
-            }
-
-        input[type="text"], input[type="color"], input[type="number"], select {
-            background: #0b1428;
-            color: #e6edf3;
-            border: 1px solid #2a3a5d;
-            border-radius: 8px;
-            padding: 8px 10px
-        }
-
-        input[type="range"] {
-            width: 220px
-        }
-
-        .hint {
-            color: #9fb1d1;
-            font-size: 12px
-        }
-
-        .counter {
-            color: #a6e3a1;
-            font-weight: 700
-        }
-
-        #log {
-            white-space: pre-wrap;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-            background: #0b1326;
-            border: 1px solid #1f2a44;
-            border-radius: 12px;
-            min-height: 220px;
-            max-height: 45vh;
-            overflow: auto;
-            padding: 12px
-        }
-
-        .bar {
-            height: 8px;
-            border-radius: 8px;
-            background: #111c33;
-            border: 1px solid #1e2a46;
-            margin-top: 6px;
-            overflow: hidden
-        }
-
-            .bar > i {
-                display: block;
-                height: 100%;
-                width: 0;
-                background: #22c55e
-            }
-
-        .sep {
-            height: 1px;
-            background: #1f2a44;
-            margin: 12px 0
-        }
-
-        .muted {
-            color: #9fb1d1
-        }
-    </style>
-
-    <!-- JSZip（ZIP生成用） -->
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" crossorigin="anonymous"></script>
-    <!-- Pyodide（Python実行）: Pillow を使える環境なら Python で変換 -->
-    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"
-            crossorigin="anonymous"></script>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PNG→JPG 変換（安全定義＋JSフォールバック）</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <style>
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans JP",sans-serif;padding:16px}
+    .card{background:#f6f7f9;border-radius:12px;padding:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .log{background:#0b1020;color:#cbd5e1;min-height:200px;white-space:pre-wrap;border-radius:12px;padding:10px}
+    button{background:#2563eb;color:#fff;border:none;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .secondary{background:#e5e7eb;color:#111}
+    .visually-hidden{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+  </style>
 </head>
 <body>
-    <header>PNG→JPG</header>
-    <main>
-        <div class="card">
-            <div class="row">
-                <button id="btnPickDir" class="btn">フォルダを選択</button>
-                <span class="hint muted">※フォルダ選択は https:// または localhost で有効。Android WebView(MAUI) では無効です。</span>
-            </div>
-            <div class="row">
-                <input id="fileInput" type="file" accept="image/png" multiple />
-                <span class="muted">または、PNGファイルを選択</span>
-            </div>
+  <h1>PNG→JPG 変換（安全定義＋JSフォールバック）</h1>
+  <div class="card">
+    <div class="row">
+      <button id="btnPickDir">フォルダを選ぶ</button>
+      <input id="fallbackDir" type="file" webkitdirectory multiple accept="image/png" class="visually-hidden">
+      <label class="secondary" for="fallbackDir" style="padding:10px 14px;border-radius:10px;cursor:pointer">フォルダ選択（互換）</label>
+      <input id="pickFiles" type="file" multiple accept="image/png">
+    </div>
+    <div class="row">
+      <label>JPEG 品質:<span id="lblQ" class="mono">90</span></label>
+      <input id="quality" type="range" min="1" max="100" value="90" oninput="lblQ.textContent=this.value">
+      <label>背景色:</label><input id="bg" type="color" value="#ffffff">
+      <label><input id="includeOriginal" type="checkbox"> 変換元PNGもZIPに入れる</label>
+      <span style="margin-left:auto">バッチ:<select id="batchSize"><option>10</option><option selected>25</option><option>50</option><option>100</option></select>件/回</span>
+    </div>
+    <div class="row">
+      <button id="btnConvert" disabled>選択したPNGを変換 → ZIPダウンロード</button>
+      <progress id="prog" max="100" value="0" style="visibility:hidden"></progress>
+      <span id="status" class="mono"></span>
+    </div>
+  </div>
 
-            <div class="sep"></div>
+  <h3>ログ</h3>
+  <div id="log" class="log mono"></div>
 
-            <div class="row">
-                <label>
-                    JPEG 品質:
-                    <input id="quality" type="range" min="1" max="100" value="90">
-                    <span id="qv" class="counter">90</span>
-                </label>
-                <label>
-                    背景色:
-                    <input id="bgcolor" type="text" value="#ffffff" size="8">
-                    <input id="bgpicker" type="color" value="#ffffff">
-                </label>
-                <label>
-                    <input id="zipWithPng" type="checkbox"> 変換元PNGもZIPに入れる
-                </label>
-                <label>
-                    バッチ:
-                    <select id="batch">
-                        <option>25</option>
-                        <option>50</option>
-                        <option selected>100</option>
-                        <option>200</option>
-                    </select> 件/回
-                </label>
-            </div>
+<script>
+const logEl=document.getElementById('log'); function ts(){return new Date().toLocaleTimeString();}
+function log(s){const line='['+ts()+'] '+s; logEl.textContent+=line+'\\n'; console.log(line); logEl.scrollTop=logEl.scrollHeight;}
 
-            <div class="row" style="margin-top:10px">
-                <button id="btnConvert" class="btn">選択したPNGを変換 → ZIPダウンロード</button>
-                <button id="btnSaveLog" class="btn sec">ログ保存</button>
-                <span class="muted">選択中: <span id="selCount" class="counter">0</span> ファイル</span>
-            </div>
+let pickedEntries=[];
+document.getElementById('pickFiles').addEventListener('change',e=>{
+  const files=[...e.target.files].filter(f=>f.name.toLowerCase().endsWith('.png'));
+  pickedEntries=files.map(f=>({name:f.name,path:f.name,file:f}));
+  finalizeSelection();
+});
+document.getElementById('fallbackDir').addEventListener('change',e=>{
+  const files=[...e.target.files];
+  pickedEntries=files.filter(f=>f.name.toLowerCase().endsWith('.png')).map(f=>({name:f.name,path:f.webkitRelativePath||f.name,file:f}));
+  finalizeSelection();
+});
+document.getElementById('btnPickDir').onclick=async()=>{
+  if(!window.isSecureContext || !window.showDirectoryPicker){ log('ネイティブフォルダピッカー不可 → 互換ボタンを使用'); return; }
+  try{
+    log('フォルダピッカー表示…'); const dir=await window.showDirectoryPicker(); log('フォルダピッカー許可');
+    pickedEntries=[];
+    async function walk(h, prefix=""){
+      for await(const [name,ent] of h.entries()){
+        if(ent.kind==='file'){ if(name.toLowerCase().endsWith('.png')){const f=await ent.getFile(); pickedEntries.push({name,path:(prefix?prefix+'/':'')+name,file:f});}}
+        else if(ent.kind==='directory'){ await walk(ent, (prefix?prefix+'/':'')+name); }
+      }
+    }
+    await walk(dir,''); finalizeSelection();
+  }catch(e){ log('フォルダ選択キャンセル/失敗: '+(e.message||e)); }
+};
+function finalizeSelection(){
+  const mb=(pickedEntries.reduce((a,x)=>a+(x.file?.size||0),0)/1024/1024).toFixed(2);
+  log('選択: '+pickedEntries.length+' PNG / 合計 '+mb+' MB');
+  document.getElementById('btnConvert').disabled = pickedEntries.length===0;
+  document.getElementById('status').textContent = pickedEntries.length? (pickedEntries.length+' ファイル ('+mb+' MB)') : '';
+}
 
-            <div class="bar"><i id="bar"></i></div>
-        </div>
+// Safer Step A
+function fileToBase64_viaFileReader(file){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>reject(fr.error||new Error('FileReader error'));
+    fr.onload=()=>{ try{ resolve((fr.result||'').toString().split(',')[1]||''); }catch(e){ reject(e);} };
+    fr.readAsDataURL(file);
+  });
+}
+async function fileToBase64_chunked(file){
+  const buf=new Uint8Array(await file.arrayBuffer());
+  const N=0x8000; const parts=[];
+  for(let i=0;i<buf.length;i+=N){ parts.push(String.fromCharCode.apply(null, buf.subarray(i,i+N))); }
+  return btoa(parts.join(''));
+}
 
-        <div class="card">
-            <div class="hint">ログ</div>
-            <div id="log"></div>
-        </div>
-    </main>
+// --- Pyodide setup with safe "js." access and robust error logging ---
+let pyReady=false, pyFailed=false;
+async function ensurePyodide(){
+  if(pyReady||pyFailed) return;
+  log('Pyodide 読込開始…');
+  const t0=performance.now();
+  try{
+    self.pyodide = await loadPyodide();
+  }catch(e){
+    log('Pyodide 読込失敗: '+(e.message||e)); pyFailed=true; return;
+  }
+  log('Pyodide 読込完了: '+((performance.now()-t0)|0)+'ms');
+  log('Python 関数定義…');
+  try{
+    await pyodide.runPythonAsync(`
+import json, base64, asyncio
+import js
+from pyodide.ffi import to_js
+async def png_to_jpeg_b64(png_b64: str, bg_hex: str, quality: int) -> str:
+    data = base64.b64decode(png_b64)
+    u8 = js.Uint8Array.new(to_js(data))
+    blob = js.Blob.new([u8], { "type": "image/png" })
+    url = js.URL.createObjectURL(blob)
+    img = js.Image.new()
+    fut = asyncio.get_event_loop().create_future()
+    def _ok(ev): fut.set_result(True)
+    def _ng(ev): fut.set_exception(RuntimeError("image load error"))
+    img.onload = _ok; img.onerror = _ng
+    img.src = url
+    await fut
+    canvas = js.document.createElement("canvas")
+    canvas.width = img.width; canvas.height = img.height
+    ctx = canvas.getContext("2d")
+    ctx.fillStyle = bg_hex; ctx.fillRect(0,0,canvas.width,canvas.height)
+    ctx.drawImage(img,0,0)
+    data_url = canvas.toDataURL("image/jpeg", max(0.01, min(1.0, quality/100)))
+    js.URL.revokeObjectURL(url)
+    return data_url.split(",",1)[1]
+async def convert_many(files_json: str, quality: int, bg_hex: str) -> str:
+    files = json.loads(files_json); out=[]
+    for f in files:
+        try:
+            b64 = await png_to_jpeg_b64(f["data"], bg_hex, quality)
+            p = f.get("path") or f["name"]
+            p = (p.rsplit(".",1)[0] + ".jpg") if "." in p else (p + ".jpg")
+            out.append({"path": p, "data": b64})
+        except Exception as e:
+            out.append({"path": f.get("path") or f["name"], "error": str(e)})
+    return json.dumps(out)
+    `);
+  }catch(e){
+    log('Python 定義失敗: '+(e.message||e));
+    pyFailed=true; // fallback to JS-only path
+    return;
+  }
+  log('Python 準備完了'); pyReady=true;
+}
 
-    <script>
-        /* ====== 環境判定 & ユーティリティ ====== */
-        const ua = navigator.userAgent.toLowerCase();
-        const isAndroid = /android/.test(ua);
-        const isWebView = /wv/.test(ua) || !!window.AndroidSaver; // MAUI のブリッジがあれば true
-        const hasDirPicker = "showDirectoryPicker" in window;
-        const $ = (id) => document.getElementById(id);
-        const logEl = $("log");
-        function now() { const d = new Date(); return `[${d.toTimeString().slice(0, 8)}] ` }
-        function log(s) { logEl.textContent += s; logEl.scrollTop = logEl.scrollHeight; }
-        function setProgress(p) { $("bar").style.width = `${p}%`; }
-        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+// JS-only fallback for conversion
+async function convertBatchJS(batch, q, bg){
+  const out=[];
+  for(const f of batch){
+    try{
+      const bytes = Uint8Array.from(atob(f.data), c=>c.charCodeAt(0));
+      const blob = new Blob([bytes], {type:'image/png'});
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      await new Promise((res,rej)=>{ img.onload=()=>res(); img.onerror=rej; img.src=url; });
+      const canvas=document.createElement('canvas'); canvas.width=img.width; canvas.height=img.height;
+      const ctx=canvas.getContext('2d'); ctx.fillStyle=bg; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.drawImage(img,0,0);
+      const dataUrl=canvas.toDataURL('image/jpeg', Math.max(0.01, Math.min(1,q/100)));
+      URL.revokeObjectURL(url);
+      const p = (f.path||f.name).replace(/\.[^.]+$/i,'') + '.jpg';
+      out.push({path:p, data:dataUrl.split(',')[1]});
+    }catch(e){ out.push({path:f.path||f.name, error:(e.message||String(e))}); }
+  }
+  return out;
+}
 
-        function sanitizeHex(c) {
-            let t = (c || "").trim();
-            if (/^#[0-9a-f]{3}$/i.test(t)) t = "#" + t[1] + t[1] + t[2] + t[2] + t[3] + t[3];
-            if (!/^#[0-9a-f]{6}$/i.test(t)) return "#ffffff";
-            return t.toLowerCase();
-        }
+document.getElementById('btnConvert').onclick=async()=>{
+  if(pickedEntries.length===0) return;
+  const q=parseInt(document.getElementById('quality').value,10);
+  const bg=document.getElementById('bg').value;
+  const includeOriginal=document.getElementById('includeOriginal').checked;
+  const batchSize=parseInt(document.getElementById('batchSize').value,10);
+  const prog=document.getElementById('prog'); const status=document.getElementById('status');
+  prog.style.visibility='visible'; prog.value=0;
 
-        /* ====== UI 初期化 ====== */
-        $("qv").textContent = $("quality").value;
-        $("quality").addEventListener("input", e => $("qv").textContent = e.target.value);
-        $("bgpicker").addEventListener("input", e => $("bgcolor").value = e.target.value);
+  await ensurePyodide(); // may set pyFailed
 
-        if (!hasDirPicker || isWebView) {
-            $("btnPickDir").disabled = true;
-            $("btnPickDir").title = "この環境ではフォルダ選択は無効です";
-        }
+  // Step A: read→b64 (safe)
+  log('Step A: 読み込み→base64化（FileReader）…');
+  const items=[];
+  for(let i=0;i<pickedEntries.length;i++){
+    const ent=pickedEntries[i];
+    let b64='';
+    try{ b64 = await fileToBase64_viaFileReader(ent.file); }
+    catch(_){ log('  FileReader失敗 → chunked fallback'); b64 = await fileToBase64_chunked(ent.file); }
+    items.push({name:ent.name, path:ent.path, data:b64});
+    if((i+1)%25===0||i===pickedEntries.length-1){ status.textContent='準備中 '+(i+1)+'/'+pickedEntries.length; await new Promise(r=>setTimeout(r,0)); }
+  }
+  log('Step A 完了: '+items.length+' 件');
 
-        let selectedFiles = []; // {name, file}
+  // Step B: conversion (Python or JS fallback)
+  const all=[]; const totalBatches=Math.ceil(items.length/batchSize); log('Step B: 変換開始（'+totalBatches+' バッチ, mode='+(pyFailed?'JS':'Python')+'）');
+  for(let b=0;b<totalBatches;b++){
+    const start=b*batchSize, end=Math.min(items.length,start+batchSize); const batch=items.slice(start,end);
+    log('  バッチ '+(b+1)+'/'+totalBatches+' 件数='+batch.length);
+    let res=[];
+    if(!pyFailed){
+      try{
+        pyodide.globals.set('files_json', JSON.stringify(batch)); pyodide.globals.set('quality', q); pyodide.globals.set('bg_hex', bg);
+        const outJson = await pyodide.runPythonAsync('await convert_many(files_json, quality, bg_hex)');
+        res = JSON.parse(outJson);
+      }catch(e){
+        log('  Python 実行失敗 → JSに切替: '+(e.message||e)); pyFailed=true;
+        res = await convertBatchJS(batch, q, bg);
+      }
+    }else{
+      res = await convertBatchJS(batch, q, bg);
+    }
+    all.push(...res);
+    prog.value=Math.round((end/items.length)*100); status.textContent='変換 '+end+'/'+items.length; await new Promise(r=>setTimeout(r,0));
+  }
+  const ok=all.filter(x=>!x.error), ng=all.filter(x=>x.error); if(ng.length){ log('失敗 '+ng.length+' 件 例: '+ng.slice(0,3).map(x=>x.path+':'+x.error).join('; ')); }
 
-        /* ====== フォルダ／ファイル選択 ====== */
-        $("btnPickDir").addEventListener("click", async () => {
-            if (!hasDirPicker) return;
-            try {
-                log(now() + "フォルダピッカー表示…\n");
-                const h = await window.showDirectoryPicker({ mode: "read" });
-                log(now() + "フォルダ許可\n");
-                selectedFiles = [];
-                const t0 = performance.now();
-                let count = 0;
-                async function walk(dirHandle, path = "") {
-                    for await (const [name, handle] of dirHandle.entries()) {
-                        if (handle.kind === "directory") { await walk(handle, path + name + "/"); continue; }
-                        if (!name.toLowerCase().endsWith(".png")) continue;
-                        const file = await handle.getFile();
-                        selectedFiles.push({ name: path + name, file });
-                        count++;
-                    }
-                }
-                await walk(h);
-                const ms = Math.round(performance.now() - t0);
-                log(now() + `フォルダ走査: ${count} 件, ${ms}ms\n`);
-                $("selCount").textContent = selectedFiles.length;
-            } catch (e) {
-                log(now() + `フォルダ選択キャンセル/失敗: ${e}\n`);
-            }
-        });
-
-        $("fileInput").addEventListener("change", e => {
-            selectedFiles = [];
-            for (const file of e.target.files) {
-                if (file && file.type === "image/png") {
-                    selectedFiles.push({ name: file.name, file });
-                }
-            }
-            $("selCount").textContent = selectedFiles.length;
-        });
-
-        /* ====== 変換エンジン（Python or Canvas） ====== */
-        let pyodide = null;
-        let pillowOk = false;
-
-        async function ensurePyodide() {
-            if (pyodide) return;
-            log(now() + "Pyodide 読込開始…\n");
-            const t0 = performance.now();
-            pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/" });
-            const ms = Math.round(performance.now() - t0);
-            log(now() + `Pyodide 読込完了: ${ms}ms\n`);
-            try {
-                await pyodide.runPythonAsync(`
-import sys, micropip
-# Pillow は pyodide 本体に含まれているので通常は import のみ
-try:
-        import PIL
-        from PIL import Image
-        pillow_ok = True
-except Exception:
-        pillow_ok = False
-`);
-                pillowOk = pyodide.globals.get("pillow_ok");
-                log(now() + (pillowOk ? "Python 関数定義準備…\n" : "Pillow未利用 → JS Canvasにフォールバック\n"));
-                if (pillowOk) {
-                    await pyodide.runPythonAsync(`
-from js import console
-import base64, io
-from PIL import Image
-
-def png_to_jpeg_b64(png_b64, quality, bg_hex):
-        # png_b64: base64 (without header)
-        raw = base64.b64decode(png_b64)
-        im = Image.open(io.BytesIO(raw)).convert("RGBA")
-        # 背景塗り
-        r = int(bg_hex[1:3],16); g = int(bg_hex[3:5],16); b = int(bg_hex[5:7],16)
-        bg = Image.new("RGB", im.size, (r,g,b))
-        bg.paste(im, mask=im.split()[3] if im.mode=="RGBA" else None)
-        out = io.BytesIO()
-        bg.save(out, format="JPEG", quality=int(quality), optimize=True)
-        return base64.b64encode(out.getvalue()).decode("ascii")
-`);
-                    log(now() + "Python 準備完了\n");
-                }
-            } catch (e) {
-                log(now() + `Pyodide 初期化中エラー → JS Canvasへ: ${e}\n`);
-                pillowOk = false;
-            }
-        }
-
-        function fileToBase64(file) {
-            return new Promise((resolve, reject) => {
-                const fr = new FileReader();
-                fr.onload = () => resolve(fr.result.split(",")[1]); // strip header
-                fr.onerror = reject;
-                fr.readAsDataURL(file);
-            });
-        }
-
-        // Python(Pillow) で1件変換（base64→base64）
-        async function convertOneByPython(file, q, bgHex) {
-            const b64in = await fileToBase64(file);
-            const b64out = await pyodide.runPythonAsync(`png_to_jpeg_b64(r"""${b64in}""", ${q}, "${bgHex}")`);
-            // 返り値は PyProxy(str) → JS string
-            return b64out.toString();
-        }
-
-        // Canvas で1件変換（Blob→Blob）
-        async function convertOneByCanvas(file, q, bgHex) {
-            const blob = file;
-            const bmp = await createImageBitmap(blob);
-            const canvas = new OffscreenCanvas(bmp.width, bmp.height);
-            const ctx = canvas.getContext("2d");
-            // 背景色
-            ctx.fillStyle = bgHex;
-            ctx.fillRect(0, 0, bmp.width, bmp.height);
-            ctx.drawImage(bmp, 0, 0);
-            const quality = Math.max(0.01, Math.min(1, q / 100));
-            const outBlob = await canvas.convertToBlob({ type: "image/jpeg", quality });
-            return await blobToBase64(outBlob);
-        }
-
-        function blobToBase64(blob) {
-            return new Promise((resolve, reject) => {
-                const fr = new FileReader();
-                fr.onload = () => resolve(fr.result.split(",")[1]);
-                fr.onerror = reject;
-                fr.readAsDataURL(blob);
-            });
-        }
-
-        /* ====== ZIP 保存（Android ブリッジ or a[download]） ====== */
-        async function saveZip(blob, filename) {
-            // MAUI(Android) ブリッジ優先
-            if (window.AndroidSaver && AndroidSaver.saveBase64) {
-                try {
-                    const b64 = await blobToBase64(blob);
-                    AndroidSaver.saveBase64(b64, filename, "application/zip");
-                    log(now() + `保存: Androidへ渡しました → ${filename}\n`);
-                    return;
-                } catch (e) {
-                    log(now() + `保存エラー(AndroidSaver): ${e}\n`);
-                }
-            }
-            // フォールバック（PC ブラウザ等）
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-            log(now() + `保存: ブラウザのダウンロードで保存しました → ${filename}\n`);
-        }
-
-        /* ====== メイン処理 ====== */
-        $("btnConvert").addEventListener("click", async () => {
-            const files = selectedFiles.slice();
-            if (files.length === 0) { log(now() + "選択ファイルがありません\n"); return; }
-
-            const q = parseInt($("quality").value, 10);
-            const bg = sanitizeHex($("bgcolor").value);
-            const batchSize = parseInt($("batch").value, 10);
-            const zipWithPng = $("zipWithPng").checked;
-
-            // Python可ならロード
-            await ensurePyodide();
-
-            const total = files.length;
-            let done = 0, ok = 0, ng = 0;
-            setProgress(0);
-
-            const zip = new JSZip();
-            const outFolder = zip.folder("jpg")!;
-            const pngFolder = zip.folder("png")!;
-
-            log(now() + `Step A: 読み込み/準備 → base64化\n`);
-
-            for (let i = 0; i < files.length; i += batchSize) {
-                const chunk = files.slice(i, i + batchSize);
-                log(now() + `Step B: 変換開始 (バッチ ${Math.floor(i / batchSize) + 1}/${Math.ceil(total / batchSize)})\n`);
-                for (const { name, file } of chunk) {
-                    try {
-                        const stem = name.replace(/\.png$/i, "");
-                        let b64jpg;
-
-                        if (pyodide && pillowOk) {
-                            b64jpg = await convertOneByPython(file, q, bg);
-                        } else {
-                            b64jpg = await convertOneByCanvas(file, q, bg);
-                        }
-                        outFolder.file(stem + ".jpg", b64jpg, { base64: true });
-                        if (zipWithPng) { pngFolder.file(name, file); }
-                        ok++;
-                    } catch (e) {
-                        log(now() + `NG: ${name} (${e})\n`);
-                        ng++;
-                    } finally {
-                        done++;
-                        const p = Math.round(done / total * 100);
-                        setProgress(p);
-                    }
-                    // UI描画のため小休止
-                    if ((done % 10) === 0) await sleep(0);
-                }
-            }
-
-            log(now() + `Step C: ZIP 生成中…\n`);
-            const zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" }); // 画像は可逆なのでSTOREでOK
-            log(now() + `完了: 成功 ${ok}, 失敗 ${ng}\n`);
-
-            const ts = new Date(); const y = ts.getFullYear(); const m = (ts.getMonth() + 1 + "").padStart(2, "0"); const d = (ts.getDate() + "").padStart(2, "0");
-            const hh = (ts.getHours() + "").padStart(2, "0"), mm = (ts.getMinutes() + "").padStart(2, "0");
-            const zipName = `png2jpg_${y}${m}${d}_${hh}${mm}.zip`;
-            await saveZip(zipBlob, zipName);
-        });
-
-        /* ====== ログ保存 ====== */
-        $("btnSaveLog").addEventListener("click", async () => {
-            const text = logEl.textContent || "";
-            const blob = new Blob([text], { type: "text/plain" });
-            if (window.AndroidSaver && AndroidSaver.saveBase64) {
-                const b64 = await blobToBase64(blob);
-                AndroidSaver.saveBase64(b64, `png2jpg_log_${Date.now()}.txt`, "text/plain");
-                log(now() + "ログをAndroidへ保存依頼\n");
-                return;
-            }
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url; a.download = `png2jpg_log_${Date.now()}.txt`;
-            document.body.appendChild(a); a.click(); a.remove();
-            URL.revokeObjectURL(url);
-        });
-
-        /* 初期ログ */
-        log(now() + "起動\n");
-        if (!hasDirPicker) log(now() + "この環境は showDirectoryPicker 非対応です\n");
-        if (isWebView) log(now() + "Android WebView/Mobile 環境: フォルダ選択を無効化しています\n");
-    </script>
+  // Step C: ZIP
+  log('Step C: ZIP 生成 …');
+  const zip=new JSZip();
+  for(let i=0;i<ok.length;i++){ const r=ok[i]; zip.file(r.path, Uint8Array.from(atob(r.data), c=>c.charCodeAt(0))); }
+  if(includeOriginal){ for(const ent of pickedEntries){ const buf=new Uint8Array(await ent.file.arrayBuffer()); zip.file(ent.path, buf);} }
+  const blob=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='converted_jpegs.zip'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+  prog.style.visibility='hidden'; status.textContent='完了: 成功 '+ok.length+', 失敗 '+ng.length; log('完了: 成功 '+ok.length+', 失敗 '+ng.length);
+};
+</script>
 </body>
 </html>
